@@ -1651,7 +1651,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 	lead_col = 0;
 	while (i < rows && lead_col < cols+1) {
 		if (fabs((*step)[i][lead_col]) < EPS) {
-			if (analysis && i != cols) {
+			if (analysis && i != cols && i != rows-1) {
 				fprintf(file, "Главный элемент при неизвестной №%d в строке №%d равен 0,"
 				"то необходимо найти другую строке,"
 				"коэффициент которой при неизвестной %d не равен 0 и поменять их местами\n",
@@ -1667,7 +1667,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					(*step)[j] = row;
 					row = NULL;
 					*permutations = *permutations + 1;
-					if (analysis && i != cols) {
+					if (analysis && i != cols && i != rows-1) {
 						fprintf(file, "Поменяем местами строки №%d и №%d и получим следующую матрицу:\n", i+1, j+1);
 						print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 						fprintf(file, "\n");
@@ -1678,7 +1678,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 			}
 			if (zero) {
 				lead_col++;
-				if (analysis && i != cols) {
+				if (analysis && i != cols && i != rows-1) {
 					fprintf(file, "Главные элементы у других уравнений также равны 0, "
 					"тогда сделаем главным элементом коэффициент "
 					"следующей неизвестной №%d в строке №%d\n",
@@ -1690,7 +1690,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 			}
 		}
 		
-		if (analysis && i != cols && i != cols-1) {
+		if (analysis && i != cols) {
 			fprintf(file, "Главный элемент в строке №%d - коэффициент у неизвестной №%d\n",
 				   i+1, (*unique_numbers)[lead_col]);
 			print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
@@ -1731,7 +1731,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 }
 
 // поиск ранга
-int rank(double ***step, int rows, int cols, bool analysis, bool mode) {
+int rank(double ***step, int rows, int cols, bool analysis, bool mode, FILE *file) {
 	int i, j;
 	bool zero;
 	int rank = rows;
@@ -1759,9 +1759,9 @@ int rank(double ***step, int rows, int cols, bool analysis, bool mode) {
 	
 	if (analysis) {	
 		if (mode == 0) {
-			printf("Ненулевых строк в основной матрице %d, следовательно её ранг равен %d\n", rank, rank);
+			fprintf(file, "Ненулевых строк в основной матрице %d, следовательно её ранг равен %d\n", rank, rank);
 		} else {
-			printf("Ненулевых строк в расширенной матрице %d, следовательно её ранг равен %d\n", rank, rank);
+			fprintf(file, "Ненулевых строк в расширенной матрице %d, следовательно её ранг равен %d\n", rank, rank);
 		}
 	}
 	
@@ -1785,11 +1785,11 @@ void print_rank(double ***matrix, double **equalities, int **unique_numbers, int
 		printf("Поиск ступенчатого вида матрицы\n");
 	}
 	
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, NULL);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, stdout);
 	
 	if (step != NULL) {
-		r = rank(&step, rows, cols, analysis, 0);
-		R = rank(&step, rows, cols+1, analysis, 1);
+		r = rank(&step, rows, cols, analysis, 0, stdout);
+		R = rank(&step, rows, cols+1, analysis, 1, stdout);
 		
 		if (r == -1) {
 			printf("Критическая ошибка!\n");
@@ -1851,7 +1851,7 @@ void print_step_type(double ***matrix, double **equalities, int **unique_numbers
 	
 	if (step != NULL) {
 		// определение ранга расширенной матрицы
-		R = rank(&step, rows, cols+1, 0, 0);
+		R = rank(&step, rows, cols+1, 0, 0, stdout);
 		
 		if (R == -1) {
 			printf("Критическая ошибка!\n");
@@ -3777,7 +3777,8 @@ void gauss_method_decision(double ***step, int ***types_of_roots,
 
 // нахождение решения для метода Гаусса
 void print_gauss_method_decision(double ***step, int ***types_of_roots,
-						   		 int **unique_numbers, int cols, int R, FILE *file) {
+						   		 int **unique_numbers, int cols,
+								 int R, bool analysis, bool _private, FILE *file) {
 	int i, j, k;
 	double *parameters = NULL;
 	double *decision = NULL;
@@ -3801,15 +3802,11 @@ void print_gauss_method_decision(double ***step, int ***types_of_roots,
 	}
 	
 	// вывод общего/единственного решения
-	if (R == cols) {
-		fprintf(file, "Решение:\n");
-	} else {
-		fprintf(file, "Общее решение:\n");
-	}
 	for (i = 0; i < cols; i++) {
 		if ((*types_of_roots)[i][0] == 1) {
 			fprintf(file, "x%d = %lf", (*unique_numbers)[i], (*step)[(*types_of_roots)[i][1]][cols]);
 			decision[i] = (*step)[(*types_of_roots)[i][1]][cols];
+			
 			for (j = 0; j < cols; j++) {
 				if ((*types_of_roots)[j][0] == 0 && (*step)[(*types_of_roots)[i][1]][j] != 0) {
 					if ((*step)[(*types_of_roots)[i][1]][j] > 0) {
@@ -3819,13 +3816,14 @@ void print_gauss_method_decision(double ***step, int ***types_of_roots,
 					}
 				}
 			}
+			
 			fprintf(file, "\n");
 		} else {
 			fprintf(file, "x%d = x%d\n", (*unique_numbers)[i], (*unique_numbers)[i]);
 		}
 	}
 	
-	if (R != cols) {
+	if (R != cols && _private) {
 		fprintf(file, " \n");
 		fprintf(file, "Частное решение при ");	
 		for (i = 0; i < cols; i++) {
@@ -3849,10 +3847,10 @@ void print_gauss_method_decision(double ***step, int ***types_of_roots,
 		for (i = 0; i < cols; i++) {
 			fprintf(file, "x%d = %lf\n", (*unique_numbers)[i], decision[i]);
 		}
+		
+		free(parameters);
+		free(decision);
 	}
-	
-	free(parameters);
-	free(decision);
 }
 
 // выводе ФСР
@@ -4007,28 +4005,47 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 		return;
 	}
 	
+	// вывод исходной системы
+	if (analysis) {
+		fprintf(file, "Исходная система:\n");
+		print_console_all(matrix, unique_numbers, equalities, cols, rows, 0, file);
+		fprintf(file, "\n");
+	}
+	
 	// нахождение ступенчатого вида
 	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, file);
 	
+	// вывод ступенчатого вида матрицы
+	R = rank(&step, rows, cols+1, 0, 1, file);
+	if (analysis) {
+		fprintf(file, "Ступенчатый вид матрицы:\n");
+		print_numbered_matrix(&step, unique_numbers, cols+1, R, 1, file);
+		fprintf(file, "\n");
+	}
+	
 	// нахождение рангов матрицы
-	r = rank(&step, rows, cols, analysis, 0);
+	r = rank(&step, rows, cols, analysis, 0, file);
 	if (analysis) {
 		fprintf(file, "Ранг основной матрицы r = %d\n\n", r);
 	}
-	R = rank(&step, rows, cols+1, analysis, 1);
 	if (analysis) {
+		fprintf(file, "Ненулевых строк в расширенной матрице %d, следовательно её ранг равен %d\n", R, R);
 		fprintf(file, "Ранг расширенной матрицы R = %d\n\n", R);
 	}
 	
 	// проверка неравенства рангов матрицы
 	if (r != R) {
-		fprintf(file, "Ранги основной и расширенной матрицы несовпадают\n");
+		fprintf(file, "Система несовместна, так как ранги основной и расширенной матрицы несовпадают\n");
 		fprintf(file, "Ответ: решений нет\n");
 		for (i = 0; i < rows; i++) {
 			free(step[i]);
 		}
 		free(step);
 		return;
+	} else {
+		if (analysis) {
+			fprintf(file, "Система совместна, так как ранги основной и расширенной матрицы совпадают\n\n");
+		}
 	}
 	
 	// выделение памяти для массива с типами переменных
@@ -4083,9 +4100,35 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 		}
 	}
 	
-	//for (i = 0; i < cols; i++) {
-		//printf("%d %d\n", types_of_roots[i][0], types_of_roots[i][1]);
-	//}
+	// вывод типов переменных
+	if (R != cols && analysis) {
+		for (i = 0, j = 0; i < cols; i++) {
+			if (types_of_roots[i][0] == 1) {
+				if (j == 0) {
+					fprintf(file, "x%d", (*unique_numbers)[i]);
+				} else {
+					fprintf(file, ", x%d", (*unique_numbers)[i]);
+				}
+				j++;
+			}
+		}
+		fprintf(file, " - базисные переменные\n");
+		
+		for (i = 0, j = 0; i < cols; i++) {
+			if (types_of_roots[i][0] == 0) {
+				if (j == 0) {
+					fprintf(file, "x%d", (*unique_numbers)[i]);
+				} else {
+					fprintf(file, ", x%d", (*unique_numbers)[i]);
+				}
+				j++;
+			}
+		}
+		fprintf(file, " - свободные переменные\n");
+		
+		fprintf(file, "\n");
+		fprintf(file, "Выразим, начиная с конца, базовые переменные через свободные\n");
+	}
 	
 	// инвертирование всех значений в основной матрице
 	for (i = 0; i < R; i++) {
@@ -4110,16 +4153,60 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 		}
 		
 		if (types_of_roots[lead_col][0] == 1) {
+			// вывод исходного уравнения
+			for (j = 0, k = 0; j < cols && analysis; j++) {
+				if (step[types_of_roots[lead_col][1]][j] != 0) {
+					if (k == 0){
+						fprintf(file, "(%lf)x%d", -step[types_of_roots[lead_col][1]][j], (*unique_numbers)[j]);
+					} else {
+						fprintf(file, " + (%lf)x%d", -step[types_of_roots[lead_col][1]][j], (*unique_numbers)[j]);
+					}
+					k++;
+				}
+			}
+			
+			// вывод преобразований
+			if (analysis) {
+				fprintf(file, " = %lf\n", step[types_of_roots[lead_col][1]][cols]);
+				fprintf(file, "%lfx%d = %lf", -step[i][lead_col], (*unique_numbers)[lead_col], step[types_of_roots[lead_col][1]][cols]);
+				for (j = 0; j < cols; j++) {
+					if (step[i][j] != 0 && j != lead_col) {
+						if (analysis){
+							fprintf(file, " + (%lf)x%d", step[i][j], (*unique_numbers)[j]);
+						}
+					}
+				}
+				if (i != R-1) {
+					fprintf(file, "\n");
+					fprintf(file, "%lfx%d = %lf", -step[i][lead_col], (*unique_numbers)[lead_col], step[types_of_roots[lead_col][1]][cols]);
+				}
+			}
+			
 			// переносим свободные переменные от других базисных
 			for (j = 0; j < cols && i != R-1; j++) {
+				if (step[i][j] != 0 && types_of_roots[j][0] == 0 && analysis) {
+					fprintf(file, " + (%lf)x%d", step[i][j], (*unique_numbers)[j]);
+				}
+			}
+			for (j = 0; j < cols && i != R-1; j++) {
 				if (step[i][j] != 0 && types_of_roots[j][0] == 1 && j != lead_col) {
+					if (analysis) {
+						fprintf(file, " + %lf*(%lf", step[i][j], step[types_of_roots[j][1]][cols]);
+					}
+					
 					for (k = 0; k < cols; k++) {
 						if (step[types_of_roots[j][1]][k] != 0 && types_of_roots[k][0] == 0) {
+							if (analysis) {
+								fprintf(file, " + (%lf)x%d", step[types_of_roots[j][1]][k], (*unique_numbers)[k]);
+							}
 							step[i][k] += step[i][j] * step[types_of_roots[j][1]][k];
 							if (fabs(step[i][k]) < EPS) {
 								step[i][k] = 0;
 							}
 						}
+					}
+					if (analysis) {
+						fprintf(file, ")");
 					}
 					step[i][cols] += step[i][j] * step[types_of_roots[j][1]][cols];
 					if (fabs(step[i][cols]) < EPS) {
@@ -4127,10 +4214,20 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 					}
 				}
 			}
+			if (analysis) {
+				fprintf(file, "\n");
+			}
 			
 			// делим всю строку на коэффициент при ведущем элементе
+			if (analysis) {
+				fprintf(file, "x%d = (%lf", (*unique_numbers)[lead_col], step[types_of_roots[lead_col][1]][cols]);
+			}
 			for (j = 0; j < cols; j++) {
 				if (step[i][j] != 0 && types_of_roots[j][0] == 0 && j != lead_col) {
+					if (analysis){
+						fprintf(file, " + (%lf)x%d", step[i][j], (*unique_numbers)[j]);
+					}
+					
 					step[i][j] = step[i][j]/(-step[i][lead_col]);
 					if (fabs(step[i][j]) < EPS) {
 						step[i][j] = 0;
@@ -4140,6 +4237,24 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 			step[i][cols] = step[i][cols]/(-step[i][lead_col]);
 			if (fabs(step[i][cols]) < EPS) {
 				step[i][cols] = 0;
+			}
+			
+			// вывод итоговой формулы
+			if (analysis) {
+				fprintf(file, ")/(%lf)\n", -step[i][lead_col]);
+				fprintf(file, "x%d = %lf", (*unique_numbers)[lead_col], step[types_of_roots[lead_col][1]][cols]);
+			
+				for (j = 0; j < cols; j++) {
+					if (types_of_roots[j][0] == 0 && step[types_of_roots[lead_col][1]][j] != 0) {
+						if (step[types_of_roots[lead_col][1]][j] > 0) {
+							fprintf(file, " + %lfx%d", step[types_of_roots[lead_col][1]][j], (*unique_numbers)[j]);
+						} else {
+							fprintf(file, " - %lfx%d", fabs(step[types_of_roots[lead_col][1]][j]), (*unique_numbers)[j]);
+						}
+					}
+				}
+				
+				fprintf(file, "\n\n");
 			}
 		}
 	}
@@ -4151,7 +4266,7 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 		printf("\n");
 	}*/
 	
-	// определние однородности СЛАУ
+	// определение однородности СЛАУ
 	for (i = 0, homogeneous = 1; i < rows; i++) {
 		if ((*equalities)[i] != 0) {
 			homogeneous = 0;
@@ -4168,11 +4283,20 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 			}
 			fprintf(file, " = 0\n", (*unique_numbers)[0]);
 		} else {
+			if (analysis) {
+				print_gauss_method_decision(&step, &types_of_roots, unique_numbers, cols, R, analysis, 0, file);
+				fprintf(file, "\n");
+			}
 			fss(&step, &types_of_roots, unique_numbers, cols, R, analysis, file);
 		}
 	} else {
+		if (R == cols) {
+			fprintf(file, "Решение:\n");
+		} else {
+			fprintf(file, "Общее решение:\n");
+		}
 		// поиск общего/единственного решения
-		print_gauss_method_decision(&step, &types_of_roots, unique_numbers, cols, R, file);
+		print_gauss_method_decision(&step, &types_of_roots, unique_numbers, cols, R, analysis, 1, file);
 	}
 	
 	// высвобождение выделенной памяти
@@ -4331,7 +4455,7 @@ int main() {
 				print_console_once(&matrix, &unique_numbers, &equalities, cols, rows, -1, stdout);
 				break;
 			case 8:
-				print_console_all(&matrix, &unique_numbers, &equalities, cols, rows, 0, stdout);
+				print_console_all(&matrix, &unique_numbers, &equalities, cols, rows, 1, stdout);
 				break;
 			case 9:
 				print_main_matrix(&matrix, cols, rows, stdout);

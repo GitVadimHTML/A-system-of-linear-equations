@@ -6,7 +6,7 @@
 
 #define EPS 1e-9
 
-////////// Заверешение программы (0) //////////
+////////// Завершение программы (0) //////////
 void close(bool *active) {
 	if (active == NULL) {
 		printf("Критическая ошибка!\n");
@@ -120,7 +120,7 @@ bool sort_matrix(double ***matrix, int **unique_numbers,
 }
 
 // удаление динамических массивов в add_row_matrix()
-void clear_data_add_row_matrix(int new_rows, double ***new_matrix) {
+void clear_data_add_row_matrix(int new_rows, double ***new_matrix, int **new_unique_numbers) {
 	int i;
 	
 	if (*new_matrix != NULL) {
@@ -129,6 +129,10 @@ void clear_data_add_row_matrix(int new_rows, double ***new_matrix) {
 		}
 	
 		free(*new_matrix);
+	}
+	
+	if (*new_unique_numbers != NULL) {
+		free(*new_unique_numbers);
 	}
 }
 
@@ -148,7 +152,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	
 	if (matrix == NULL || unique_numbers == NULL || cols == NULL || rows == NULL || equalities == NULL || numbers == NULL) {
 		printf("Критическая ошибка\n");
-		clear_data_add_row_matrix(new_rows, &new_matrix);
+		clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 		*error = 1;
 		return;
 	}
@@ -157,7 +161,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	new_unique_numbers = calloc(new_cols, sizeof(double));
 	if (new_unique_numbers == NULL) {
 		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
-		clear_data_add_row_matrix(new_rows, &new_matrix);
+		clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 		*error = 1;
 		return;
 	} else {
@@ -170,12 +174,12 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	switch (add_numbers(&new_unique_numbers, &new_cols, numbers, total_variables)) {
 		case -1:
 			printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
-			clear_data_add_row_matrix(new_rows, &new_matrix);
+			clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 			*error = 1;
 			return;
 		case 0:
 			printf("Ошибка!\n");
-			clear_data_add_row_matrix(new_rows, &new_matrix);
+			clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 			*error = 1;
 			return;
 	}
@@ -184,7 +188,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	new_matrix = calloc((new_rows+1), sizeof(double*));
 	if (new_matrix == NULL) {
 		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
-		clear_data_add_row_matrix(new_rows, &new_matrix);
+		clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 		*error = 1;
 		return;
 	} else {
@@ -192,7 +196,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 			new_matrix[i] = calloc(new_cols, sizeof(double));
 			if (new_matrix[i] == NULL) {
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
-				clear_data_add_row_matrix(new_rows, &new_matrix);
+				clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 				*error = 1;
 				return;
 			}
@@ -217,7 +221,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	//соритируем копию массива с уникальными номерами в порядке возрастания
 	if (!sort_matrix(&new_matrix, &new_unique_numbers, new_cols, *rows)) {
 		printf("Ошибка!\n");
-		clear_data_add_row_matrix(new_rows, &new_matrix);
+		clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 		*error = 1;
 		return;
 	}
@@ -236,7 +240,7 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	new_equalities = realloc(*equalities, sizeof(double) * new_rows);
 	if (new_equalities == NULL) {
 		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
-		clear_data_add_row_matrix(new_rows, &new_matrix);
+		clear_data_add_row_matrix(new_rows, &new_matrix, &new_unique_numbers);
 		*error = 1;
 		return;
 	} else {
@@ -250,11 +254,10 @@ void add_row_matrix(double ***matrix, int **unique_numbers, int *cols, int *rows
 	}
 	free(*matrix);
 	
-	
 	// очищаем массив unique_numbers
 	free(*unique_numbers);
 	
-	// заменяем страык указатели на новые
+	// заменяем старые указатели на новые
 	*matrix = new_matrix;
 	*unique_numbers = new_unique_numbers;
 	*rows = new_rows;
@@ -271,7 +274,7 @@ bool is_number(const char ch) {
 // проверка на допустимость символа в уравнении
 bool is_allowed(const char ch) {
 	return is_number(ch) || ch == '0' || ch == '-' || ch == '+' || ch == '.' || ch == ' '
-		   || ch == 'x' || ch == 'X' || ch == '\n' || ch == '=' || ch == ',';
+		   || ch == 'x' || ch == 'X' || ch == '\n' || ch == '=' || ch == ',' || ch == '\t';
 }
 
 // удаление лишних пробелов
@@ -359,7 +362,7 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 	
 	// вспомогательные переменные для чтения строки
 	int n = *len, i, j, k;
-	bool is_num, right, start;
+	bool is_num, right, start, dots;
 	
 	if ((*str)[0] == '=') {
 		printf("Некорректный ввод уравнения\n");
@@ -398,7 +401,7 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 	}
 	
 	// чтение строки
-	for (i = 0, str_number_len = 0, start = 1,
+	for (i = 0, str_number_len = 0, start = 1, dots = 0,
 		 is_num = 1, number = 0, right = 0, total_variables = 0; i < n; i++) {
 		
 		// проверка на то, что номер неизвестной целое число
@@ -412,6 +415,7 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 		// проверка на то, что введено было только число или служебные символы
 		if ((*str)[i+1] == '\0' && total_variables == 0) {
 			printf("Некорректный ввод уравнения\n");
+			*error = 1;
 			clear_data_read_equation(&str_number, &numbers, total_variables+1);
 			return;
 		}
@@ -470,7 +474,7 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 			continue;
 		}
 		
-		// проверка на то, что уравнение ни к чему не приравненно (не завершенно)
+		// проверка на то, что уравнение ни к чему не приравнено (не завершено)
 		if ((*str)[i+1] == '\0' && right == 0) {
 			printf("Некорректный ввод уравнения\n");
 			clear_data_read_equation(&str_number, &numbers, total_variables);
@@ -517,6 +521,10 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 					
 					str_number[0] = (*str)[++i];
 					str_number_len = 1;
+					
+					if (str_number[0] == '.') {
+						dots = 1;
+					}
 				}
 			}
 			
@@ -586,7 +594,16 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 		
 		// конец чтения коэффициента при неизвестной
 		if (right == 0 && (*str)[i] == 'x' && is_num == 1) {
+			dots = 0;
 			is_num = 0;
+			
+			// проверка, что была введена только точка
+			if (str_number_len == 1 && str_number[0] == '.') {
+				printf("Некорректный ввод уравнения\n");
+				*error = 1;
+				clear_data_read_equation(&str_number, &numbers, total_variables);
+				return;
+			}
 			
 			new_numbers = realloc(numbers, sizeof(double*) * (total_variables+1));
 				
@@ -661,6 +678,17 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 		
 		// проверка символа
 		if (is_number((*str)[i]) || (*str)[i] == '0' || (*str)[i] == '.') {
+			if ((*str)[i] == '.') {
+				if (dots) {
+					printf("Некорректный ввод уравнения\n");
+					clear_data_read_equation(&str_number, &numbers, total_variables);
+					*error = 1;
+					return;
+				} else {
+					dots = 1;
+				}
+			}
+			
 			new_str_number = realloc(str_number, sizeof(char) * (str_number_len+1));
 			if (new_str_number == NULL) {
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
@@ -691,6 +719,14 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 		
 		// конец чтения строки
 		if ((*str)[i+1] == '\0' && right == 1) {
+			// проверка, что была введена только точка
+			if (str_number_len == 1 && str_number[0] == '.') {
+				printf("Некорректный ввод уравнения\n");
+				*error = 1;
+				clear_data_read_equation(&str_number, &numbers, total_variables);
+				return;
+			}
+			
 			new_str_number = realloc(str_number, sizeof(char) * (str_number_len+1));
 			if (new_str_number == NULL) {
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
@@ -722,7 +758,7 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 void add_console(double ***matrix, int **unique_numbers, double **equalities,
 				 int *cols, int *rows) {
 	if (matrix == NULL || unique_numbers == NULL || equalities == NULL) {
-		printf("Критическая ошибка");
+		printf("Критическая ошибка!\n");
 		return;
 	}
 	
@@ -742,7 +778,7 @@ void add_console(double ***matrix, int **unique_numbers, double **equalities,
 	while(1) {
 		new_str = realloc(str, sizeof(char) * (n+1));
 		if (new_str == NULL) {
-			printf("Критическая ошибка");
+			printf("Критическая ошибка!\n");
 			free(str);
 			return;
 		} else {
@@ -817,6 +853,7 @@ void insert(double ***matrix, int **unique_numbers, double **equalities,
 	}
 	
 	int row, i, k;
+	int old_rows = *rows;
 	char end;
 	double *intermediate_poiter = NULL;
 	double intermediate_value;
@@ -830,6 +867,9 @@ void insert(double ***matrix, int **unique_numbers, double **equalities,
 	
 	// добавление нового уравнения в конец СЛАУ
 	add_console(matrix, unique_numbers, equalities, cols, rows);
+	if (old_rows == *rows) {
+		return;
+	}
 	
 	// перемещение последнего уравнения на выбранную позицию
 	for (i = *rows-1; i > row; i--) {
@@ -1019,6 +1059,7 @@ void swap(double ***matrix, double **equalities, int cols, int rows) {
 	}
 	
 	int first, second, i;
+	double *intermediate_row = NULL;
 	double intermediate_value;
 	char end;
 	
@@ -1029,11 +1070,9 @@ void swap(double ***matrix, double **equalities, int cols, int rows) {
 		return;
 	}
 	
-	for (i = 0; i < cols; i++) {
-		intermediate_value = (*matrix)[second-1][i];
-		(*matrix)[second-1][i] = (*matrix)[first-1][i];
-		(*matrix)[first-1][i] = intermediate_value;
-	}
+	intermediate_row = (*matrix)[second-1];
+	(*matrix)[second-1] = (*matrix)[first-1];
+	(*matrix)[first-1] = intermediate_row;
 	
 	intermediate_value = (*equalities)[second-1];
 	(*equalities)[second-1] = (*equalities)[first-1];
@@ -1149,6 +1188,7 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 		 int *cols, int *rows) {
 	double **copy_matrix = NULL;
 	double *copy_row = NULL;
+	double *copy_equalities = NULL;
 	int *copy_unique_numbers = NULL;
 	
 	int row, i, j, k;
@@ -1188,9 +1228,10 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 	}
 	row--;
 	
-	// создаём копию матрицы коэффициентов
+	// создаём копию матрицы коэффициентов и свободных членов
 	copy_matrix = calloc(*rows-1, sizeof(double*));
-	if (copy_matrix == NULL) {
+	copy_equalities = calloc(*rows-1, sizeof(double));
+	if (copy_matrix == NULL || copy_equalities == NULL) {
 		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 		return;
 	} else {
@@ -1213,6 +1254,8 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 				for (j = 0; j < *cols; j++) {
 					copy_matrix[i-k][j] = (*matrix)[i][j];
 				}
+				
+				copy_equalities[i-k] = (*equalities)[i];
 			}
 		}
 	}
@@ -1283,6 +1326,7 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 	if (new_cols < *cols) {
 		free(*unique_numbers);
 	}
+	free(*equalities);
 	
 	// заменяем указатели на новые
 	*matrix = copy_matrix;
@@ -1291,6 +1335,7 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 		*unique_numbers = copy_unique_numbers;
 		*cols = new_cols;
 	}
+	*equalities = copy_equalities;
 	
 	print_console_all(matrix, unique_numbers, equalities, *cols, *rows, 0, stdout);
 }
@@ -1416,8 +1461,8 @@ void print_matrix(double ***matrix, int cols, int rows, char ***text, int *width
 }
 
 // вывод расширенной матрицы в консоль
-void print_extended_matrix(double ***matrix, double **equalities, int **unique_numbers,
-						   int cols, int rows, bool analysis) {
+void print_extended_matrix(double ***matrix, double **equalities,
+						   int cols, int rows) {
 	int i, k;
 	char **text = NULL;
 	int width = 0;
@@ -1668,9 +1713,9 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 	lead_col = 0;
 	while (i < rows && lead_col < extended_cols) {
 		if (fabs((*step)[i][lead_col]) < EPS) {
-			if (analysis && i != rows-1 && lead_col+1 < cols) {
+			if (analysis && lead_col+1 < cols) {
 				fprintf(file, "Главный элемент при неизвестной №%d в строке №%d равен 0, "
-				"то необходимо найти другую строке, "
+				"значит необходимо под исходной найти другую строку, "
 				"коэффициент которой при неизвестной %d не равен 0 и поменять их местами\n",
 				(*unique_numbers)[lead_col], i+1, (*unique_numbers)[lead_col]);
 			}
@@ -1685,7 +1730,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					(*step)[j] = row;
 					row = NULL;
 					*permutations = *permutations + 1;
-					if (analysis && i != rows-1 && lead_col < cols) {
+					if (analysis && lead_col < cols) {
 						fprintf(file, "Поменяем местами строки №%d и №%d и получим следующую матрицу:\n", i+1, j+1);
 						print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
 						fprintf(file, "\n");
@@ -1696,7 +1741,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 			}
 			if (zero) {
 				lead_col++;
-				if (analysis && i != rows-1 && lead_col < cols) {
+				if (analysis && lead_col < cols) {
 					fprintf(file, "Главные элементы у других уравнений также равны 0, "
 					"тогда сделаем главным элементом коэффициент "
 					"следующей неизвестной №%d в строке №%d\n",
@@ -2348,6 +2393,7 @@ double search_det_through_step_type(double ***matrix,
 	return det;
 }
 
+// поиск определителя через нижнетреугольный вид матрицы
 double search_det_through_lower_type(double ***matrix, int **unique_numbers,
 								     int order, int *error, FILE *file) {
 	double **lower = NULL;
@@ -3082,6 +3128,7 @@ double determinant(double ***matrix, double **equalities, int **unique_numbers,
 	return det;
 }
 
+// обработчик ошибок функции determinant
 void determinant_error(int *error) {
 	switch (*error) {
 		case 1:
@@ -4394,11 +4441,6 @@ void solving(double ***matrix, int **unique_numbers,
 	}
 	
 	if (cols == rows && analysis) {
-		if (rows < 2) {
-			printf("СЛАУ имеет менее 2-х уравнений\n");
-			return;
-		}
-		
 		fflush(stdin);
 		printf("Выберите вариант решения СЛАУ:\n"
 			   "1 - Метод Гаусса\n"
@@ -4508,7 +4550,7 @@ int main() {
 				print_main_matrix(&matrix, cols, rows, stdout);
 				break;
 			case 10:
-				print_extended_matrix(&matrix, &equalities, &unique_numbers, cols, rows, analysis);
+				print_extended_matrix(&matrix, &equalities, cols, rows);
 				break;
 			case 11:
 				print_step_type(&matrix, &equalities, &unique_numbers, cols, rows, analysis);

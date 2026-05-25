@@ -1058,6 +1058,11 @@ void swap(double ***matrix, double **equalities, int cols, int rows) {
 		return;
 	}
 	
+	if (rows < 2) {
+		printf("В систему меньше двух уравнений\n");
+		return;
+	}
+	
 	int first, second, i;
 	double *intermediate_row = NULL;
 	double intermediate_value;
@@ -1190,6 +1195,7 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 	double *copy_row = NULL;
 	double *copy_equalities = NULL;
 	int *copy_unique_numbers = NULL;
+	int *new_copy_unique_numbers = NULL;
 	
 	int row, i, j, k;
 	char end;
@@ -1231,7 +1237,8 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 	// создаём копию матрицы коэффициентов и свободных членов
 	copy_matrix = calloc(*rows-1, sizeof(double*));
 	copy_equalities = calloc(*rows-1, sizeof(double));
-	if (copy_matrix == NULL || copy_equalities == NULL) {
+	copy_unique_numbers = calloc(*cols, sizeof(int));
+	if (copy_matrix == NULL || copy_equalities == NULL || copy_unique_numbers == NULL) {
 		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 		return;
 	} else {
@@ -1258,6 +1265,10 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 				copy_equalities[i-k] = (*equalities)[i];
 			}
 		}
+		
+		for (i = 0; i < *cols; i++) {
+			copy_unique_numbers[i] = (*unique_numbers)[i];
+		}
 	}
 	
 	// поиск лишних номеров неизвестных
@@ -1275,33 +1286,37 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 		// если столбец под номером i нулевой, то ...
 		if (is_zero) {
 			// делаем копию массива номеров неизвестных без лишнего номера
-			copy_unique_numbers = malloc(sizeof(int) * (*cols-1));
-			if (copy_unique_numbers == NULL) {
+			new_copy_unique_numbers = calloc(new_cols-1, sizeof(int));
+			if (new_copy_unique_numbers == NULL) {
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 				for (j = 0; j < *rows-1; j++) {
 					free(copy_matrix[j]);
 				}
 				free(copy_matrix);
+				free(copy_unique_numbers);
 				return;
 			} else {
-				for (j = 0, k = 0; j < *cols; j++) {
+				for (j = 0, k = 0; j < new_cols-1; j++) {
 					if (j == i) {
 						k = 1;
-						continue;
 					}
-					copy_unique_numbers[j-k] = (*unique_numbers)[j];
+					new_copy_unique_numbers[j] = copy_unique_numbers[j+k];
 				}
+				
+				free(copy_unique_numbers);
+				copy_unique_numbers = new_copy_unique_numbers;
+				new_copy_unique_numbers = NULL;
 			}
 			
 			// удаляем столбец с нулями
 			for (j = 0; j < *rows-1; j++) {
 				// удаляем элемент в строке при помощи сдвигов
-				for (k = i; k < *cols-1; k++) {
+				for (k = i; k < new_cols-1; k++) {
 					copy_matrix[j][k] = copy_matrix[j][k+1];
 				}
 				
 				// уменьшаем память для строки
-				copy_row = realloc(copy_matrix[j], sizeof(double) * (*cols-1));
+				copy_row = realloc(copy_matrix[j], sizeof(double) * (new_cols-1));
 				if (copy_row == NULL) {
 					for (k = 0; k < *rows-1; k++) {
 						free(copy_matrix[k]);
@@ -1315,6 +1330,7 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 			}
 			
 			new_cols--;
+			i--;
 		}
 	}
 	
@@ -1656,7 +1672,7 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 
 // приведение к ступенчатому виду
 void step_type(double ***matrix, double **equalities, int **unique_numbers,
-			   double ***step, int *permutations, int rows, int cols, bool extended,
+			   double ***step, int *permutations, int rows, int cols,
 			   bool analysis, FILE *file) {
 	if (matrix == NULL || equalities == NULL || unique_numbers == NULL || step == NULL) {
 		printf("Критическая ошибка!");
@@ -1669,11 +1685,6 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 	double main_el_after;
 	bool zero; // флаг
 	double *row = NULL;
-	int extended_cols = cols+1;
-	
-	if (!extended) {
-		extended_cols--;
-	}
 	
 	// выделение памяти для расширенной матрицы step и её заполнение
 	*step = calloc(rows, sizeof(double*));
@@ -1682,13 +1693,14 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 		return;
 	} else {
 		for (i = 0; i < rows; i++) {
-			row = calloc(extended_cols, sizeof(double));
+			row = calloc(cols+1, sizeof(double));
 			if (row == NULL) {		
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 				for (j = 0; j < i; j++) {
 					free((*step)[j]);
 				}
 				free(*step);
+				step = NULL;
 				return;
 			} else {
 				(*step)[i] = row;
@@ -1704,14 +1716,14 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 	
 	if (analysis) {
 		fprintf(file, "Исходная матрица:\n");
-		print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
+		print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 		fprintf(file, "\n");
 	}
 	
 	// приведение матрицы к ступенчатому виду
 	i = 0;
 	lead_col = 0;
-	while (i < rows && lead_col < extended_cols) {
+	while (i < rows && lead_col < cols+1) {
 		if (fabs((*step)[i][lead_col]) < EPS) {
 			if (analysis && lead_col+1 < cols) {
 				fprintf(file, "Главный элемент при неизвестной №%d в строке №%d равен 0, "
@@ -1732,7 +1744,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					*permutations = *permutations + 1;
 					if (analysis && lead_col < cols) {
 						fprintf(file, "Поменяем местами строки №%d и №%d и получим следующую матрицу:\n", i+1, j+1);
-						print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
+						print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 						fprintf(file, "\n");
 					}
 					break;
@@ -1746,7 +1758,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					"тогда сделаем главным элементом коэффициент "
 					"следующей неизвестной №%d в строке №%d\n",
 					(*unique_numbers)[lead_col], i+1);
-					print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
+					print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 					fprintf(file, "\n");
 				}
 				continue;
@@ -1756,7 +1768,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 		if (analysis && i != cols-1 && lead_col < cols) {
 			fprintf(file, "Главный элемент в строке №%d - коэффициент у неизвестной №%d\n",
 				    i+1, (*unique_numbers)[lead_col]);
-			print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
+			print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 			fprintf(file, "\n");
 		}
 		
@@ -1770,7 +1782,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					   i+1, (*step)[j][lead_col], first, j+1);
 			}
 			
-			for (k = lead_col; k < extended_cols; k++) {
+			for (k = lead_col; k < cols+1; k++) {
 				if (analysis && i != cols) {
 					fprintf(file, "A%d%d * -A%d%d/A%d%d + A%d%d = (%lf) * -(%lf/%lf) + (%lf)",
 					i+1, k+1, j+1, lead_col+1, i+1, lead_col+1, j+1, k+1,
@@ -1789,7 +1801,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 			
 			if (analysis && i != cols) {
 				fprintf(file, "\nПолучится матрица:\n");
-				print_numbered_matrix(step, unique_numbers, cols+1, rows, extended, file);
+				print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
 				fprintf(file, "\n");
 			}
 		}
@@ -1854,7 +1866,7 @@ void print_rank(double ***matrix, double **equalities, int **unique_numbers, int
 		printf("Поиск ступенчатого вида матрицы\n");
 	}
 	
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, stdout);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, stdout);
 	
 	if (step != NULL) {
 		r = rank(&step, rows, cols, analysis, 0, stdout);
@@ -1916,7 +1928,7 @@ void print_step_type(double ***matrix, double **equalities, int **unique_numbers
 	}
 	
 	// нахождение ступенчатого вида
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, stdout);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, stdout);
 	
 	if (step != NULL) {
 		// определение ранга расширенной матрицы
@@ -2342,7 +2354,7 @@ double search_det_through_step_type(double ***matrix,
 	}
 	
 	// приведение побочной матрицы к ступенчатому виду
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, order, order, 0, analysis, file);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, order, order, analysis, file);
 	
 	// нахождение определителя
 	if (analysis) {
@@ -3927,7 +3939,7 @@ void print_gauss_method_decision(double ***step, int ***types_of_roots,
 	}
 }
 
-// выводе ФСР
+// вывод ФСР
 void fss(double ***step, int ***types_of_roots, int **unique_numbers,
 		 int cols, int R, int analysis, FILE *file) {
 	int i, j, k;
@@ -4088,7 +4100,7 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 	}
 	
 	// нахождение ступенчатого вида
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, file);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, file);
 	
 	// вывод ступенчатого вида матрицы
 	R = rank(&step, rows, cols+1, 0, 1, file);
@@ -4279,7 +4291,7 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 			}
 			
 			// переносим свободные переменные от других базисных
-			for (j = 0; !flag == 0 && j < cols && i != R-1; j++) {
+			for (j = 0; j < cols && i != R-1; j++) {
 				if (step[i][j] != 0 && types_of_roots[j][0] == 1 && j != lead_col) {
 					if (analysis) {
 						fprintf(file, " + (%lf)*(%lf", step[i][j], step[types_of_roots[j][1]][cols]);

@@ -598,7 +598,8 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 			is_num = 0;
 			
 			// проверка, что была введена только точка
-			if (str_number_len == 1 && str_number[0] == '.') {
+			if ((str_number_len == 1 && str_number[0] == '.') ||
+				(str_number_len == 2 && (str_number[0] == '+' || str_number[0] == '-') && str_number[1] == '.')) {
 				printf("Некорректный ввод уравнения\n");
 				*error = 1;
 				clear_data_read_equation(&str_number, &numbers, total_variables);
@@ -720,7 +721,8 @@ void read_equation(double ***matrix, char **str, const int *len, double **equali
 		// конец чтения строки
 		if ((*str)[i+1] == '\0' && right == 1) {
 			// проверка, что была введена только точка
-			if (str_number_len == 1 && str_number[0] == '.') {
+			if ((str_number_len == 1 && str_number[0] == '.') ||
+				(str_number_len == 2 && (str_number[0] == '+' || str_number[0] == '-') && str_number[1] == '.')) {
 				printf("Некорректный ввод уравнения\n");
 				*error = 1;
 				clear_data_read_equation(&str_number, &numbers, total_variables);
@@ -1026,6 +1028,10 @@ void loading(double ***matrix, int **unique_numbers, double **equalities,
 		}
 		str[n] = ch;
 		n++;
+	}
+	
+	if (n > 0) {
+		free(str);
 	}
 	
 	for (i = 0; i < *rows; i++) {
@@ -1567,21 +1573,21 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 		return;
 	} else {
 		// первая строка с номерами переменных
-		new_row = calloc(cols-1, sizeof(double));
+		new_row = calloc(cols, sizeof(double));
 		if (new_row == NULL) {
 			printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 			free(copy_step);
 			return;
 		} else {
 			copy_step[0] = new_row;
-			for (i = 0; i < cols-1; i++) {
+			for (i = 0; i < cols; i++) {
 				copy_step[0][i] = (double) (*unique_numbers)[i];
 			}
 		}
 		
 		// копия переменных
 		for (i = 1; i < rows+1; i++) {
-			new_row = calloc(cols-1, sizeof(double));
+			new_row = calloc(cols, sizeof(double));
 			if (new_row == NULL) {
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 				for (j = 0; j < i; j++) {
@@ -1591,7 +1597,7 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 				return;
 			} else {
 				copy_step[i] = new_row;
-				for (j = 0; j < cols-1; j++) {
+				for (j = 0; j < cols; j++) {
 					copy_step[i][j] = (*step)[i-1][j];
 				}
 			}
@@ -1599,7 +1605,16 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 	}
 	
 	// создание матрицы символов
-	print_matrix(&copy_step, cols-1, rows+1, &text, &width);
+	print_matrix(&copy_step, cols, rows+1, &text, &width);
+	
+	if (text == NULL) {
+		printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
+		for (i = 0; i < rows+1; i++) {
+		free(copy_step[i]);
+		}
+		free(copy_step);
+		return;
+	}
 	
 	// удаление дробной части у номеров переменных
 	for (i = 0, flag = 0; i < width; i++) {
@@ -1653,7 +1668,7 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 		}
 		
 		if (extended) {
-			fprintf(file, " | %lf\n", (*step)[i-1][cols-1]);
+			fprintf(file, " | %lf\n", (*step)[i-1][cols]);
 		} else {
 			fprintf(file, "\n");
 		}
@@ -1672,7 +1687,7 @@ void print_numbered_matrix(double ***step, int **unique_numbers,
 
 // приведение к ступенчатому виду
 void step_type(double ***matrix, double **equalities, int **unique_numbers,
-			   double ***step, int *permutations, int rows, int cols,
+			   double ***step, int *permutations, int rows, int cols, bool extended,
 			   bool analysis, FILE *file) {
 	if (matrix == NULL || equalities == NULL || unique_numbers == NULL || step == NULL) {
 		printf("Критическая ошибка!");
@@ -1685,6 +1700,11 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 	double main_el_after;
 	bool zero; // флаг
 	double *row = NULL;
+	int dynamic_cols = cols;
+	
+	if (extended) {
+		dynamic_cols = cols+1;
+	}
 	
 	// выделение памяти для расширенной матрицы step и её заполнение
 	*step = calloc(rows, sizeof(double*));
@@ -1693,7 +1713,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 		return;
 	} else {
 		for (i = 0; i < rows; i++) {
-			row = calloc(cols+1, sizeof(double));
+			row = calloc(dynamic_cols, sizeof(double));
 			if (row == NULL) {		
 				printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
 				for (j = 0; j < i; j++) {
@@ -1709,21 +1729,23 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					(*step)[i][j] = (*matrix)[i][j];
 				}
 				
-				(*step)[i][cols] = (*equalities)[i];
+				if (extended) {
+					(*step)[i][cols] = (*equalities)[i];
+				}
 			}
 		}
 	}
 	
 	if (analysis) {
 		fprintf(file, "Исходная матрица:\n");
-		print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
+		print_numbered_matrix(step, unique_numbers, cols, rows, extended, file);
 		fprintf(file, "\n");
 	}
 	
 	// приведение матрицы к ступенчатому виду
 	i = 0;
 	lead_col = 0;
-	while (i < rows && lead_col < cols+1) {
+	while (i < rows && lead_col < dynamic_cols) {
 		if (fabs((*step)[i][lead_col]) < EPS) {
 			if (analysis && lead_col+1 < cols) {
 				fprintf(file, "Главный элемент при неизвестной №%d в строке №%d равен 0, "
@@ -1744,7 +1766,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					*permutations = *permutations + 1;
 					if (analysis && lead_col < cols) {
 						fprintf(file, "Поменяем местами строки №%d и №%d и получим следующую матрицу:\n", i+1, j+1);
-						print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
+						print_numbered_matrix(step, unique_numbers, cols, rows, extended, file);
 						fprintf(file, "\n");
 					}
 					break;
@@ -1758,7 +1780,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					"тогда сделаем главным элементом коэффициент "
 					"следующей неизвестной №%d в строке №%d\n",
 					(*unique_numbers)[lead_col], i+1);
-					print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
+					print_numbered_matrix(step, unique_numbers, cols, rows, extended, file);
 					fprintf(file, "\n");
 				}
 				continue;
@@ -1768,7 +1790,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 		if (analysis && i != cols-1 && lead_col < cols) {
 			fprintf(file, "Главный элемент в строке №%d - коэффициент у неизвестной №%d\n",
 				    i+1, (*unique_numbers)[lead_col]);
-			print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
+			print_numbered_matrix(step, unique_numbers, cols, rows, extended, file);
 			fprintf(file, "\n");
 		}
 		
@@ -1782,7 +1804,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 					   i+1, (*step)[j][lead_col], first, j+1);
 			}
 			
-			for (k = lead_col; k < cols+1; k++) {
+			for (k = lead_col; k < dynamic_cols; k++) {
 				if (analysis && i != cols) {
 					fprintf(file, "A%d%d * -A%d%d/A%d%d + A%d%d = (%lf) * -(%lf/%lf) + (%lf)",
 					i+1, k+1, j+1, lead_col+1, i+1, lead_col+1, j+1, k+1,
@@ -1801,7 +1823,7 @@ void step_type(double ***matrix, double **equalities, int **unique_numbers,
 			
 			if (analysis && i != cols) {
 				fprintf(file, "\nПолучится матрица:\n");
-				print_numbered_matrix(step, unique_numbers, cols+1, rows, 1, file);
+				print_numbered_matrix(step, unique_numbers, cols, rows, extended, file);
 				fprintf(file, "\n");
 			}
 		}
@@ -1866,7 +1888,7 @@ void print_rank(double ***matrix, double **equalities, int **unique_numbers, int
 		printf("Поиск ступенчатого вида матрицы\n");
 	}
 	
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, stdout);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, stdout);
 	
 	if (step != NULL) {
 		r = rank(&step, rows, cols, analysis, 0, stdout);
@@ -1928,7 +1950,7 @@ void print_step_type(double ***matrix, double **equalities, int **unique_numbers
 	}
 	
 	// нахождение ступенчатого вида
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, stdout);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, stdout);
 	
 	if (step != NULL) {
 		// определение ранга расширенной матрицы
@@ -2000,6 +2022,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
 					free((*lower)[j]);
 				}
 				free(*lower);
+				lower = NULL;
 				return;
 			} else {
 				(*lower)[i] = row;
@@ -2013,7 +2036,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
 	
 	if (analysis) {
 		fprintf(file, "Исходная матрица:\n");
-		print_numbered_matrix(lower, unique_numbers, cols+1, rows, 0, file);
+		print_numbered_matrix(lower, unique_numbers, cols, rows, 0, file);
 		fprintf(file, "\n");
 	}
 	
@@ -2038,7 +2061,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
                     *permutations = *permutations + 1;
                     if (analysis) {
 						fprintf(file, "Поменяем местами строки №%d и №%d и получим следующую матрицу:\n", i+1, j+1);
-						print_numbered_matrix(lower, unique_numbers, cols+1, rows, 0, file);
+						print_numbered_matrix(lower, unique_numbers, cols, rows, 0, file);
 						fprintf(file, "\n");
 					}
                     break;
@@ -2051,7 +2074,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
 					"тогда сделаем главным элементом коэффициент "
 					"следующей неизвестной №%d в строке №%d\n",
 					(*unique_numbers)[lead_col], i+1);
-					print_numbered_matrix(lower, unique_numbers, cols+1, rows, 0, file);
+					print_numbered_matrix(lower, unique_numbers, cols, rows, 0, file);
 					fprintf(file, "\n");
 				}
                 continue;
@@ -2061,7 +2084,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
         if (analysis && i != 0) {
 			fprintf(file, "Главный элемент в строке №%d - коэффициент у неизвестной №%d\n",
 				   i+1, (*unique_numbers)[lead_col]);
-			print_numbered_matrix(lower, unique_numbers, cols+1, rows, 0, file);
+			print_numbered_matrix(lower, unique_numbers, cols, rows, 0, file);
 			fprintf(file, "\n");
 		}
 		
@@ -2095,7 +2118,7 @@ void lower_triangular_type(double ***matrix, int **unique_numbers,
             
             if (analysis) {
 				fprintf(file, "\nПолучится матрица:\n");
-				print_numbered_matrix(lower, unique_numbers, cols+1, rows, 0, file);
+				print_numbered_matrix(lower, unique_numbers, cols, rows, 0, file);
 				fprintf(file, "\n");
 			}
         }
@@ -2241,7 +2264,7 @@ void print_transpose(double ***matrix, int cols, int rows) {
 	}
 }
 
-////////// Функции, ищущие минор (15) //////////
+////////// Функция, ищущия минор (15) //////////
 // поиск минора
 void search_minor(double ***matrix, double ***minor, int order, int row, int col) {
 	int i, k, q, l;
@@ -2290,53 +2313,6 @@ void search_minor(double ***matrix, double ***minor, int order, int row, int col
 	}
 }
 
-// вывод минора в консоль
-void print_minor(double ***matrix, int rows, int cols) {
-	if (matrix == NULL) {
-		printf("Критическая ошибка!\n");
-		return;
-	}
-	
-	int row, col, i, j;
-	char end;
-	double **minor = NULL;;
-	
-	if (rows == 0) {
-		printf("Уравнений в системе нет\n");
-		return;
-	}
-	
-	printf("Исходная матрица: \n");
-	print_main_matrix(matrix, cols, rows, stdout);
-	
-	if (rows != cols) {
-		printf("Основная матрица не квадратная\n");
-		return;
-	}
-	
-	printf("Введите через пробел номера строки и столбца, "
-		   "на пересечении которых находится элемент: ");
-	if (scanf("%d%d%c", &row, &col, &end) != 3 || row <= 0 || row > rows ||
-		col <= 0 || col > cols || end != '\n') {
-		printf("Данные введены некорректно\n");
-		return;
-	}
-	
-	// поиск минора
-	search_minor(matrix, &minor, rows, row-1, col-1);
-	
-	// вывод минора
-	if (minor != NULL) {
-		printf("\nМинор: \n");
-		print_main_matrix(&minor, cols-1, rows-1, stdout);
-		
-		for (i = 0; i < rows; i++) {
-			free(minor[i]);
-		}
-		free(minor);
-	}
-}
-
 ////////// Функции, ищущие определитель (14) //////////
 // поиск определителя через верхнетреугольный вид матрицы
 double search_det_through_step_type(double ***matrix,
@@ -2354,7 +2330,11 @@ double search_det_through_step_type(double ***matrix,
 	}
 	
 	// приведение побочной матрицы к ступенчатому виду
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, order, order, analysis, file);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, order, order, 0, analysis, file);
+	
+	if (step == NULL) {
+		return 0;
+	}
 	
 	// нахождение определителя
 	if (analysis) {
@@ -2421,6 +2401,11 @@ double search_det_through_lower_type(double ***matrix, int **unique_numbers,
 	// приведение побочной матрицы к ступенчатому виду
 	lower_triangular_type(matrix, unique_numbers, &lower, &permutations, order, order, 1, file);
 	
+	if (lower == NULL) {
+		*error = 2;
+		return 0;
+	}
+	
 	if (permutations == 0) {
 		fprintf(file, "Перестановок строк не было сделано\n");
 	} else {
@@ -2455,6 +2440,10 @@ double search_det_through_lower_type(double ***matrix, int **unique_numbers,
 		det *= lower[i][i];
 	}
 	
+	if (fabs(det) < EPS) {
+		det = 0;
+	}
+	
 	printf("%lf\n", det);
 	
 	for (i = 0; i < order; i++) {
@@ -2474,7 +2463,7 @@ double second_order(double ***matrix, int order, bool analysis, int *error, FILE
 	
 	if (matrix == NULL) {
 		*error = 1;
-		return;
+		return 0;
 	}
 	
 	det = (*matrix)[0][0]*(*matrix)[1][1] - (*matrix)[0][1]*(*matrix)[1][0];
@@ -2501,6 +2490,10 @@ double second_order(double ***matrix, int order, bool analysis, int *error, FILE
 		fprintf(file, "%lf\n", det);
 	}
 	
+	if (fabs(det) < EPS) {
+		det = 0;
+	}
+	
 	return det;
 }
 
@@ -2517,7 +2510,7 @@ double rule_of_triangle(double ***matrix, int order, int *error, FILE *file) {
 	
 	if (matrix == NULL) {
 		*error = 1;
-		return;
+		return 0;
 	}
 	
 	det = (*matrix)[0][0]*(*matrix)[1][1]*(*matrix)[2][2] +
@@ -2551,6 +2544,11 @@ double rule_of_triangle(double ***matrix, int order, int *error, FILE *file) {
 			fprintf(file, " = ");
 		}
 	}
+	
+	if (fabs(det) < EPS) {
+		det = 0;
+	}
+	
 	fprintf(file, "%lf\n", det);
 	
 	return det;
@@ -3116,7 +3114,11 @@ double determinant(double ***matrix, double **equalities, int **unique_numbers,
 										   	   &text, &width_of_levels, error);
 				break;
 		}
-			
+		
+		if (fabs(det) < EPS) {
+			det = 0;
+		}
+		
 		// записываем на последний уровень сам определитель
 		add_number_into_text(det, 0, &(text[rows-1]), &(width_of_levels[rows-1]), rows, error);
 		
@@ -3205,6 +3207,11 @@ double algebraic_addition(double ***matrix, int order, int row, int col,
 	
 	search_minor(matrix, &minor, order, row, col);
 	
+	if (minor == NULL) {
+		*error = 2;
+		return 0;
+	}
+	
 	det = 0;
 	if (analysis) {
 		fprintf(file, "A%d%d:\n", row+1, col+1);
@@ -3286,6 +3293,76 @@ void print_algebraic_addition(double ***matrix, double **equalities, int **uniqu
 			alg = 0;
 		}
 		printf("Алгебраическое дополнение: %lf\n", alg);
+	}
+}
+
+// вывод минора в консоль
+void print_minor(double ***matrix, double **equalities, int **unique_numbers,  int rows, int cols,
+				 bool analysis) {
+	if (matrix == NULL) {
+		printf("Критическая ошибка!\n");
+		return;
+	}
+	
+	int row, col, i, j;
+	double det;
+	char end;
+	double **minor = NULL;
+	int choice_method = 0;
+	int choice_col_or_row = 0;
+	int error = 0;
+	
+	if (rows == 0) {
+		printf("Уравнений в системе нет\n");
+		return;
+	}
+	
+	printf("Исходная матрица: \n");
+	print_main_matrix(matrix, cols, rows, stdout);
+	
+	if (rows != cols) {
+		printf("Основная матрица не квадратная\n");
+		return;
+	}
+	
+	if (rows == 1) {
+		printf("Матрица состоит из одного элемента\n");
+		return;
+	}
+	
+	printf("Введите через пробел номера строки и столбца, "
+		   "на пересечении которых находится элемент: ");
+	if (scanf("%d%d%c", &row, &col, &end) != 3 || row <= 0 || row > rows ||
+		col <= 0 || col > cols || end != '\n') {
+		printf("Данные введены некорректно\n");
+		return;
+	}
+	
+	// поиск минора
+	search_minor(matrix, &minor, rows, row-1, col-1);
+	
+	// вывод минора
+	if (minor != NULL) {
+		printf("Матрица: \n");
+		if (!analysis || rows-1 == 1) {
+			print_main_matrix(&minor, cols-1, rows-1, stdout);
+		}
+		
+		det = determinant(&minor, equalities, unique_numbers, rows-1, cols-1,
+		analysis, &error, &choice_method, &choice_col_or_row, stdout);
+		determinant_error(&error);
+		
+		if (!error) {
+			if (abs(det) < EPS) {
+				det = 0;
+			}
+			printf("Минор: %lf\n", det);
+		}
+				
+		for (i = 0; i < rows; i++) {
+			free(minor[i]);
+		}
+		free(minor);
 	}
 }
 
@@ -3567,7 +3644,7 @@ void kramers_method(double ***matrix, int **unique_numbers,
 	
 	// вывод ответа, если определитель равен 0
 	if (det == 0) {
-		fprintf(file, "Ответ: решений нет или их бесконечно много");
+		fprintf(file, "Ответ: решений нет или их бесконечно много\n");
 		return;
 	}
 	
@@ -4023,7 +4100,7 @@ void fss(double ***step, int ***types_of_roots, int **unique_numbers,
 	}
 	
 	if (analysis) {
-		print_numbered_matrix(&decisions, unique_numbers, cols+1, cols-R, 0, file);
+		print_numbered_matrix(&decisions, unique_numbers, cols, cols-R, 0, file);
 		fprintf(file, "\n");
 		
 		fprintf(file, "ФСР:\n");
@@ -4100,13 +4177,13 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 	}
 	
 	// нахождение ступенчатого вида
-	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, analysis, file);
+	step_type(matrix, equalities, unique_numbers, &step, &permutations, rows, cols, 1, analysis, file);
 	
 	// вывод ступенчатого вида матрицы
 	R = rank(&step, rows, cols+1, 0, 1, file);
 	if (analysis) {
 		fprintf(file, "Ступенчатый вид матрицы:\n");
-		print_numbered_matrix(&step, unique_numbers, cols+1, R, 1, file);
+		print_numbered_matrix(&step, unique_numbers, cols, R, 1, file);
 		fprintf(file, "\n");
 	}
 	
@@ -4510,7 +4587,7 @@ int main() {
 			   "8 - Вывести СЛАУ\n"
 			   "9 - Вывести основную матрицу\n"
 			   "10 - Вывести расширенную матрицу\n"
-			   "11 - Вывести трапецеидального вид матрицы\n"
+			   "11 - Вывести трапецеидальный вид матрицы\n"
 			   "12 - Вывести нижнетреугольный вид матрицы\n"
 			   "13 - Транспонировать основную матрицу\n"
 			   "14 - Найти определитель\n"
@@ -4527,7 +4604,6 @@ int main() {
 		printf("-> ");
 		if (scanf("%d%c", &key, &end) != 2 || end != '\n') {
 			printf("Ошибка ввода данных!\n\n");
-			fflush(stdin);
 			continue;
 		}
 		switch (key) {
@@ -4577,7 +4653,7 @@ int main() {
 				print_determinant(&matrix, &equalities, &unique_numbers, rows, cols, analysis);
 				break;
 			case 15:
-				print_minor(&matrix, rows, cols);
+				print_minor(&matrix, &equalities, &unique_numbers,  rows, cols, analysis);
 				break;
 			case 16:
 				print_algebraic_addition(&matrix, &equalities, &unique_numbers, rows, cols, analysis);

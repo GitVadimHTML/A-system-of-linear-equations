@@ -1289,8 +1289,31 @@ void del(double ***matrix, int **unique_numbers, double **equalities,
 			}
 		}
 		
+		
 		// если столбец под номером i нулевой, то ...
 		if (is_zero) {
+			// если последняя колонка нулевая
+			if (new_cols == 1) {
+				for (j = 0; j < *rows; j++) {
+					free((*matrix)[j]);
+				}
+				free(*matrix);
+				free(*unique_numbers);
+				free(*equalities);
+				*matrix = NULL;
+				*unique_numbers = NULL;
+				*equalities = NULL;
+				*rows = 0;
+				*cols = 0;
+				for (j = 0; j < *rows-1; j++) {
+					free(copy_matrix[j]);
+				}
+				free(copy_matrix);
+				free(copy_equalities);
+				free(copy_unique_numbers);
+				return;
+			}
+			
 			// делаем копию массива номеров неизвестных без лишнего номера
 			new_copy_unique_numbers = calloc(new_cols-1, sizeof(int));
 			if (new_copy_unique_numbers == NULL) {
@@ -1391,10 +1414,10 @@ void print_matrix(double ***matrix, int cols, int rows, char ***text, int *width
 	for (i = 0; i < rows; i++) {
 		for (j = 0; j < cols; j++) {
 			number = (int) (*matrix)[i][j];
-			size_number = 7;
+			size_number = 8;
 			if (number < 0) {
 				size_number++;
-				number = fabs(number);
+				number = abs(number);
 			}
 			if (number != 0) {
 				while (number != 0) {
@@ -2469,7 +2492,7 @@ double second_order(double ***matrix, int order, bool analysis, int *error, FILE
 	det = (*matrix)[0][0]*(*matrix)[1][1] - (*matrix)[0][1]*(*matrix)[1][0];
 	if (analysis) {
 		print_main_matrix(matrix, order, order, file);
-		fprintf(file, "A11*A22 - A01*A10 = ");
+		fprintf(file, "A11*A22 - A12*A21 = ");
 		for (i = 0; i < 4; i++) {
 			if (i % 2 != 0) {
 				fprintf(file, "*");
@@ -2521,8 +2544,8 @@ double rule_of_triangle(double ***matrix, int order, int *error, FILE *file) {
 		  (*matrix)[2][2]*(*matrix)[0][1]*(*matrix)[1][0];
 		  
 	print_main_matrix(matrix, order, order, file);
-	fprintf(file, "A00*A11*A22 + A02*A10*A21 + A20*A01*A12 - ");
-	fprintf(file, "A02*A11*A20 - A00*A21*A12 - A22*A01*A10 = ");
+	fprintf(file, "A11*A22*A33 + A13*A21*A32 + A31*A12*A23 - ");
+	fprintf(file, "A13*A22*A31 - A11*A32*A23 - A33*A12*A21 = ");
 	for (i = 0; i < 18; i++) {
 		if (i % 3 != 0) {
 			fprintf(file, "*");
@@ -3100,7 +3123,7 @@ double determinant(double ***matrix, double **equalities, int **unique_numbers,
 			return 0.0;
 		}
 			
-		// добавляем исходную матрицу на нулевой уровень (закулисья кхм.. кхм... )
+		// добавляем исходную матрицу на нулевой уровень
 		add_matrix_into_text(matrix, rows, '|', &(text[0]),
 						 	 &(width_of_levels[0]), rows, error);
 		// находим определитель
@@ -3195,6 +3218,7 @@ double algebraic_addition(double ***matrix, int order, int row, int col,
 						  bool analysis, int *error, int *choice_method, int *choice_col_or_row,
 						  double **equalities, int **unique_numbers, FILE *file) {
 	double **minor = NULL;
+	int *new_unique_numbers = NULL;
 	int i, j;
 	double det;
 	double alg;
@@ -3214,8 +3238,21 @@ double algebraic_addition(double ***matrix, int order, int row, int col,
 	
 	det = 0;
 	if (analysis) {
+		new_unique_numbers = calloc(order-1, sizeof(int));
+		if (new_unique_numbers == NULL) {
+			printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
+			return;
+		} else {
+			for (i = 0, j = 0; i < order-1; i++) {
+				if (i == col) {
+					j++;
+				}
+				new_unique_numbers[i] = (*unique_numbers)[i+j];
+			}
+		}
+		
 		fprintf(file, "A%d%d:\n", row+1, col+1);
-		det = determinant(&minor, equalities, unique_numbers, order-1, order-1, analysis,
+		det = determinant(&minor, equalities, &new_unique_numbers, order-1, order-1, analysis,
 						 error, choice_method, choice_col_or_row, file);
 		if (*error) {
 			for (i = 0; i < order; i++) {
@@ -3225,6 +3262,7 @@ double algebraic_addition(double ***matrix, int order, int row, int col,
 			return 0.0;
 		}
 		
+		free(new_unique_numbers);
 	} else {
 		det = search_det_through_step_type(&minor, equalities, unique_numbers, order-1, 0, error, stdout);
 	}
@@ -3259,10 +3297,14 @@ void print_algebraic_addition(double ***matrix, double **equalities, int **uniqu
 	
 	printf("Исходная матрица:\n");
 	print_main_matrix(matrix, cols, rows, stdout);
-	printf("\n");
 	
 	if (rows != cols) {
 		printf("Основная матрица не квадратная\n");
+		return;
+	}
+	
+	if (rows == 1) {
+		printf("Матрица состоит из одного элемента\n");
 		return;
 	}
 	
@@ -3282,12 +3324,11 @@ void print_algebraic_addition(double ***matrix, double **equalities, int **uniqu
 		return;
 	}
 	
-	printf("\n");
 	alg = algebraic_addition(matrix, rows, row-1, col-1, analysis,
 							 &error, &choice_method, &choice_col_or_row,
 							 equalities, unique_numbers, stdout);
-	
 	determinant_error(&error);
+	
 	if (!error) {
 		if (fabs(alg) < EPS) {
 			alg = 0;
@@ -3308,6 +3349,7 @@ void print_minor(double ***matrix, double **equalities, int **unique_numbers,  i
 	double det;
 	char end;
 	double **minor = NULL;
+	int *new_unique_numbers = NULL;
 	int choice_method = 0;
 	int choice_col_or_row = 0;
 	int error = 0;
@@ -3343,12 +3385,27 @@ void print_minor(double ***matrix, double **equalities, int **unique_numbers,  i
 	
 	// вывод минора
 	if (minor != NULL) {
-		printf("Матрица: \n");
-		if (!analysis || rows-1 == 1) {
-			print_main_matrix(&minor, cols-1, rows-1, stdout);
+		new_unique_numbers = calloc(cols-1, sizeof(int));
+		if (new_unique_numbers == NULL) {
+			printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
+			for (i = 0; i < rows; i++) {
+				free(minor[i]);
+			}
+			free(minor);
+			return;
+		} else {
+			for (i = 0, j = 0; i < cols-1; i++) {
+				if (i == col-1) {
+					j++;
+				}
+				new_unique_numbers[i] = (*unique_numbers)[i+j];
+			}
 		}
 		
-		det = determinant(&minor, equalities, unique_numbers, rows-1, cols-1,
+		printf("Матрица минора: \n");
+		print_main_matrix(&minor, cols-1, rows-1, stdout);
+		
+		det = determinant(&minor, equalities, &new_unique_numbers, rows-1, cols-1,
 		analysis, &error, &choice_method, &choice_col_or_row, stdout);
 		determinant_error(&error);
 		
@@ -3363,6 +3420,7 @@ void print_minor(double ***matrix, double **equalities, int **unique_numbers,  i
 			free(minor[i]);
 		}
 		free(minor);
+		free(new_unique_numbers);
 	}
 }
 
@@ -3565,6 +3623,9 @@ void invertible_matrix(double ***matrix, double **equalities,
 			}
 			
 			(*invertible)[i][j] = (*invertible)[i][j]/det;
+			if (fabs((*invertible)[i][j]) < EPS) {
+				(*invertible)[i][j] = 0;
+			}
 			
 			if (analysis) {
 				fprintf(file, "%lf\n", (*invertible)[i][j]);
@@ -3617,6 +3678,7 @@ void kramers_method(double ***matrix, int **unique_numbers,
 	int error = 0;
 	int choice_method = 0;
 	int choice_col_or_row = 0;
+	int *new_unique_numbers = NULL;
 	double result;
 	
 	int i, j, k;
@@ -3686,6 +3748,25 @@ void kramers_method(double ***matrix, int **unique_numbers,
 	
 	fprintf(file, "\nПоиск определителей неизвестных: \n\n");
 	for (k = 0; k < order; k++) {
+		new_unique_numbers = calloc(order, sizeof(int));
+		if (new_unique_numbers == NULL) {
+			printf("Ошибка при выделении памяти. Попробуйте повторить действие или перезапустить программу\n");
+			for (i = 0; i < order; i++) {
+				free(var_matrix[i]);
+			}
+			free(var_matrix);
+			free(var_dets);
+			return;
+		} else {
+			for (i = 0; i < order; i++) {
+				if (i == k) {
+					new_unique_numbers[i] = -1;
+					continue;
+				}
+				new_unique_numbers[i] = (*unique_numbers)[i];
+			}
+		}
+		
 		for (i = 0; i < order; i++) {
 			for (j = 0; j < order; j++) {
 				if (j == k) {
@@ -3697,9 +3778,11 @@ void kramers_method(double ***matrix, int **unique_numbers,
 		}
 		
 		fprintf(file, "Определитель неизвестной x%d:\n", (*unique_numbers)[k]);
-		var_det = determinant(&var_matrix, equalities, unique_numbers, order, order,
+		var_det = determinant(&var_matrix, equalities, &new_unique_numbers, order, order,
 							  analysis, &error, &choice_method, &choice_col_or_row, file);
 		determinant_error(&error);
+		free(new_unique_numbers);
+		
 		if (error) {
 			for (i = 0; i < order; i++) {
 				free(var_matrix[i]);
@@ -4277,7 +4360,9 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 					j++;
 				}
 			}
-			fprintf(file, " - базисные переменные\n");
+			if (j != 0) {
+				fprintf(file, " - базисные переменные\n");
+			}
 		
 			for (i = 0, j = 0; i < cols; i++) {
 				if (types_of_roots[i][0] == 0) {
@@ -4289,11 +4374,15 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 					j++;
 				}
 			}
-			fprintf(file, " - свободные переменные\n");
+			if (j != 0) {
+				fprintf(file, " - свободные переменные\n");
+			}
 			fprintf(file, "\n");
 		}
 		
-		fprintf(file, "Выразим, начиная с конца, базовые переменные через свободные\n");
+		if (R-1 != 0) {
+			fprintf(file, "Выразим, начиная с конца, базовые переменные через свободные\n");
+		}
 	}
 	
 	// инвертирование всех значений в основной матрице

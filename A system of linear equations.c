@@ -1867,7 +1867,7 @@ int rank(double ***step, int rows, int cols, bool analysis, bool mode, FILE *fil
 	}
 	
 	// определение ранга
-	for (i = rows-1; i > 0; i--) {
+	for (i = rows-1; i >= 0; i--) {
 		zero = 1;
 		for (j = 0; j < cols; j++) {
 			if (fabs((*step)[i][j]) > EPS) {
@@ -4360,9 +4360,7 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 					j++;
 				}
 			}
-			if (j != 0) {
-				fprintf(file, " - базисные переменные\n");
-			}
+			fprintf(file, " - базисные переменные\n");
 		
 			for (i = 0, j = 0; i < cols; i++) {
 				if (types_of_roots[i][0] == 0) {
@@ -4380,9 +4378,7 @@ void gauss_method(double ***matrix, int **unique_numbers, double **equalities,
 			fprintf(file, "\n");
 		}
 		
-		if (R-1 != 0) {
-			fprintf(file, "Выразим, начиная с конца, базовые переменные через свободные\n");
-		}
+		fprintf(file, "Выразим, начиная с конца, базовые переменные через свободные\n");
 	}
 	
 	// инвертирование всех значений в основной матрице
